@@ -21,13 +21,13 @@ const loadCustomRole = async (customRoleId, orgId) => {
 import { MEMBER_ROLES, ROLE_LABELS } from "../config/permissions.js";
 import { hasPermission } from "../middleware/permissionMiddleware.js";
 import { orgMemberFilter, assignableRolesFor } from "./permissionController.js";
-import { issueVerification, applyAdminPassword } from "./accountController.js";
+import { issueVerification, applyAdminPassword, manualLink } from "./accountController.js";
 
 // Message suffix telling the admin whether the verification email went out
 const emailNote = (email) =>
   email.sent
     ? " A verification email has been sent."
-    : ` The verification email could not be sent (${email.reason}) — use "Resend verification" later.`;
+    : ` The verification email could not be sent (${email.reason}). Copy the verification link and send it to the user yourself.`;
 
 const validateObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -101,6 +101,7 @@ export const createAdmin = async (req, res) => {
       success: true,
       message: "Admin created successfully by SuperAdmin." + emailNote(mail),
       emailSent: mail.sent,
+      ...manualLink(mail),
       data: {
         _id: admin._id,
         name: admin.name,
@@ -230,6 +231,7 @@ export const createUser = async (req, res) => {
       success: true,
       message: `${ROLE_LABELS[role]} created successfully.` + emailNote(mail),
       emailSent: mail.sent,
+      ...manualLink(mail),
       data: {
         _id: user._id,
         name: user.name,
@@ -535,17 +537,20 @@ export const updateUser = async (req, res) => {
     ).select("-password -permissions");
 
     let note = "";
+    let linkExtra = {};
     if (password) {
       const target = await User.findById(req.params.id).select("+password");
       const sent = await applyAdminPassword(req, target, String(password));
       note = sent.sent
         ? " New password set — the user was emailed a one-time link to view it."
-        : ` New password set, but the email could not be sent (${sent.reason}).`;
+        : ` New password set, but the email could not be sent (${sent.reason}). Copy the verification link and send it to the user yourself.`;
+      linkExtra = { emailSent: sent.sent, ...manualLink(sent) };
     }
 
     return res.status(200).json({
       success: true,
       message: "User updated successfully." + note,
+      ...linkExtra,
       data: updatedUser,
     });
   } catch (error) {

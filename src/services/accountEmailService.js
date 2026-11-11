@@ -21,6 +21,11 @@ const getTransporter = () => {
       port,
       secure: port === 465,
       auth: { user: smtpUser(), pass: smtpPass() },
+      // Render's free plan blocks outgoing SMTP (ports 25 / 465 / 587). Fail fast instead of
+      // holding the request for minutes — the admin then gets the link to share by hand.
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
   }
   return transporter;
@@ -46,14 +51,42 @@ export const layout = (title, body) => `
 export const button = (href, label) =>
   `<p style="margin:22px 0"><a href="${href}" style="background:#16A6B8;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:700;display:inline-block">${escapeHtml(label)}</a></p>`;
 
+// Optional: send over HTTPS with Brevo's free plan (300 emails/day) — works where SMTP
+// ports are blocked (Render free). Set BREVO_API_KEY (+ MAIL_FROM, a sender verified in Brevo).
+const brevoKey = () => process.env.BREVO_API_KEY?.trim();
+const mailFrom = () => process.env.MAIL_FROM?.trim() || smtpUser();
+
+const sendWithBrevo = async ({ to, subject, text, html }) => {
+  try {
+    const r = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": brevoKey(), "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        sender: { name: "Task Management Blizz board", email: mailFrom() },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (r.ok) return { sent: true };
+    console.error(`[accountEmail] Brevo "${subject}" to ${to} failed: ${r.status} ${(await r.text()).slice(0, 200)}`);
+  } catch (err) {
+    console.error(`[accountEmail] Brevo "${subject}" to ${to} failed:`, err.message);
+  }
+  return { sent: false, reason: "The email could not be delivered" };
+};
+
 export const send = async ({ to, subject, text, html }) => {
+  if (!isTest && brevoKey() && mailFrom()) return sendWithBrevo({ to, subject, text, html });
   if (!isTest && (!smtpUser() || !smtpPass())) {
     console.warn(`[accountEmail] SMTP not configured — "${subject}" to ${to} not sent`);
     return { sent: false, reason: "Email server (SMTP) is not configured" };
   }
   try {
     await getTransporter().sendMail({
-      from: `"Task Management Blizz board" <${smtpUser() || "no-reply@Blizzboard.local"}>`,
+      from: `"Task Management Blizz board" <${mailFrom() || "no-reply@Blizzboard.local"}>`,
       to,
       subject,
       text,
@@ -89,7 +122,8 @@ The link expires in 24 hours and works only once. If you did not expect this ema
     <p style="color:#6E8799;font-size:12px">For your security the password is not included in this email.
     After verification it is shown <strong>once, for 30 seconds</strong>, then destroyed.
     This link expires in 24 hours and can be used only once.</p>`);
-  return send({ to: user.email, subject, text, html });
+  // the link comes back too: if the email fails, the administrator can share it by hand
+  return send({ to: user.email, subject, text, html }).then((result) => ({ ...result, link }));
 };
 
 export const sendResetRequestNotification = (admin, requester) => {

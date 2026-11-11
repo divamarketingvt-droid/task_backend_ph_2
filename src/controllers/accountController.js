@@ -11,6 +11,13 @@ export const REVEAL_SECONDS = 30;                       // password visible 30s
 const validId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 /**
+ * When the verification email could not be sent, the administrator who set the password gets
+ * the link to share by hand (WhatsApp, chat…). Only returned to that administrator, and only
+ * on failure — they already know the password, so the link reveals nothing new to them.
+ */
+export const manualLink = (email) => (email?.sent || !email?.link ? {} : { verifyLink: email.link });
+
+/**
  * Store the admin-set password (encrypted) + a one-time token, and email the link.
  * `user` must be a saved User document. Returns { sent, reason }.
  */
@@ -218,8 +225,9 @@ export const setUserPassword = async (req, res) => {
       success: true,
       message: email.sent
         ? `New password set. ${target.name} has been emailed a one-time link to view it.`
-        : `New password set, but the email could not be sent (${email.reason}).`,
+        : `New password set, but the email could not be sent (${email.reason}). Copy the verification link and send it to ${target.name} yourself.`,
       emailSent: email.sent,
+      ...manualLink(email),
     });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -249,8 +257,11 @@ export const resendVerification = async (req, res) => {
     const email = await issueVerification(target, plain, target.emailVerified === false ? "welcome" : "reset");
     res.json({
       success: email.sent,
-      message: email.sent ? `Verification email sent to ${target.email}.` : `Email could not be sent (${email.reason}).`,
+      message: email.sent
+        ? `Verification email sent to ${target.email}.`
+        : `Email could not be sent (${email.reason}). Copy the verification link and send it to ${target.name} yourself.`,
       emailSent: email.sent,
+      ...manualLink(email),
     });
   } catch (error) {
     console.error("Resend Verification Error:", error);
