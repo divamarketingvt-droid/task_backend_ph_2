@@ -32,6 +32,17 @@ const emailNote = (email) =>
 const validateObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // ==================== SUPERADMIN: CREATE ADMIN ====================
+// 409 message for an email that is already registered. Emails are unique across the whole app.
+// Inside the requester's organization (or for SuperAdmin) we can say who has it; outside it we
+// only say "another account", so nothing leaks about other organizations.
+const emailConflictMessage = (taken, req, orgId) => {
+  const ids = [taken._id, taken.admin_id, taken.createdBy].map((id) => (id ? String(id) : ""));
+  const visible = req.user.role === "SuperAdmin" || (orgId && ids.includes(String(orgId)));
+  return visible
+    ? `${taken.email} is already used by ${taken.name}${req.user.role === "SuperAdmin" ? "" : " in your organization"}. Edit that user instead, or use a different email.`
+    : `${taken.email} is already registered to another account. Please use a different email address.`;
+};
+
 export const createAdmin = async (req, res) => {
   try {
     const { name, email, password, phone, department } = req.body;
@@ -59,11 +70,13 @@ export const createAdmin = async (req, res) => {
     }
 
     // Check duplicate email
-    const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
+    const existing = await User.findOne({ email: String(email).toLowerCase().trim() })
+      .select("name email admin_id createdBy")
+      .lean();
     if (existing) {
       return res.status(409).json({
         success: false,
-        message: "Email already exists",
+        message: emailConflictMessage(existing, req, null),
       });
     }
 
@@ -188,11 +201,13 @@ export const createUser = async (req, res) => {
       role = customRole.baseRole;
     }
 
-    const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
+    const existing = await User.findOne({ email: String(email).toLowerCase().trim() })
+      .select("name email admin_id createdBy")
+      .lean();
     if (existing) {
       return res.status(409).json({
         success: false,
-        message: "Email already exists",
+        message: emailConflictMessage(existing, req, orgId),
       });
     }
 
@@ -486,11 +501,13 @@ export const updateUser = async (req, res) => {
 
     // Check email conflict
     if (email && email.toLowerCase().trim() !== existingUser.email) {
-      const emailTaken = await User.findOne({ email: email.toLowerCase().trim() });
+      const emailTaken = await User.findOne({ email: email.toLowerCase().trim() })
+        .select("name email admin_id createdBy")
+        .lean();
       if (emailTaken) {
         return res.status(409).json({
           success: false,
-          message: "Email already in use",
+          message: emailConflictMessage(emailTaken, req, req.adminId || existingUser.admin_id),
         });
       }
     }
