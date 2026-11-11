@@ -1,23 +1,18 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
+import { getTransporter, fromHeader, mailFrom } from "./accountEmailService.js";
 import { telegramMeetingNotice } from "./telegram/telegramNotify.js";
 
-const port = Number(process.env.SMTP_PORT || 587);
 const timeZone = process.env.MEETING_TIME_ZONE || "Asia/Kolkata";
 
 // Tests: nothing leaves the machine — messages are captured instead
 const isTest = process.env.NODE_ENV === "test";
 export const capturedMeetingEmails = [];
 
-const transporter = isTest ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port,
-  secure: port === 465,
-  auth: {
-    user: process.env.SMTP_USER?.trim(),
-    pass: process.env.SMTP_PASS?.trim().replace(/\s+/g, ""),
-  },
-});
+// Same mail server and sender as every other email (accountEmailService)
+const transporter = {
+  sendMail: (message) => (isTest ? nodemailer.createTransport({ jsonTransport: true }) : getTransporter()).sendMail(message),
+};
 
 const BRAND = {
   name: "Task Management System",
@@ -312,12 +307,12 @@ const sendToAttendees = async (meeting, subject, text, html, onlyEmails = null) 
   const smtpUser = process.env.SMTP_USER?.trim();
   const smtpPass = process.env.SMTP_PASS?.trim().replace(/\s+/g, "");
 
-  if (!isTest && (!smtpUser || !smtpPass)) {
+  if (!isTest && (!smtpUser || !smtpPass || !mailFrom())) {
     return {
       sent: false,
       sentCount: 0,
       failedCount: 0,
-      reason: "Gmail SMTP credentials are missing from .env",
+      reason: !mailFrom() ? "No sender address (MAIL_FROM_EMAIL) is configured" : "SMTP credentials are missing from .env",
     };
   }
 
@@ -336,7 +331,7 @@ const sendToAttendees = async (meeting, subject, text, html, onlyEmails = null) 
   const results = await Promise.allSettled(
     recipients.map(async (email) => {
       const info = await transporter.sendMail({
-        from: `"${BRAND.name}" <${smtpUser || "no-reply@Blizzboard.local"}>`,
+        from: fromHeader(BRAND.name),
         to: email,
         subject,
         text,

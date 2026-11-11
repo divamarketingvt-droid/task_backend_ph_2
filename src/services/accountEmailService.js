@@ -11,8 +11,22 @@ export const sentMessages = [];
 const smtpUser = () => process.env.SMTP_USER?.trim();
 const smtpPass = () => process.env.SMTP_PASS?.trim().replace(/\s+/g, "");
 
+// The "From" address. It must be a sender verified in Brevo (or the Gmail account itself).
+// A Brevo SMTP login (xxxx@smtp-brevo.com) is NOT a valid sender — Brevo rejects it — so the
+// sender comes from MAIL_FROM_EMAIL (or MAIL_FROM), and SMTP_USER only when it is a real mailbox.
+export const mailFrom = () => {
+  const explicit = (process.env.MAIL_FROM_EMAIL || process.env.MAIL_FROM || "").trim();
+  if (explicit) return explicit;
+  const user = smtpUser() || "";
+  return /@smtp-brevo\.com$/i.test(user) ? "" : user;
+};
+export const mailFromName = (fallback = "Task Management Blizz board") =>
+  (process.env.MAIL_FROM_NAME || "").trim() || fallback;
+/** e.g. "Task Management" <you@gmail.com> */
+export const fromHeader = (name) => `"${mailFromName(name).replace(/"/g, "")}" <${mailFrom() || "no-reply@Blizzboard.local"}>`;
+
 let transporter = null;
-const getTransporter = () => {
+export const getTransporter = () => {
   if (isTest) return nodemailer.createTransport({ jsonTransport: true });
   if (!transporter) {
     const port = Number(process.env.SMTP_PORT || 587);
@@ -54,7 +68,6 @@ export const button = (href, label) =>
 // Optional: send over HTTPS with Brevo's free plan (300 emails/day) — works where SMTP
 // ports are blocked (Render free). Set BREVO_API_KEY (+ MAIL_FROM, a sender verified in Brevo).
 const brevoKey = () => process.env.BREVO_API_KEY?.trim();
-const mailFrom = () => process.env.MAIL_FROM?.trim() || smtpUser();
 
 const sendWithBrevo = async ({ to, subject, text, html }) => {
   try {
@@ -62,7 +75,7 @@ const sendWithBrevo = async ({ to, subject, text, html }) => {
       method: "POST",
       headers: { "api-key": brevoKey(), "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
-        sender: { name: "Task Management Blizz board", email: mailFrom() },
+        sender: { name: mailFromName(), email: mailFrom() },
         to: [{ email: to }],
         subject,
         textContent: text,
@@ -84,9 +97,13 @@ export const send = async ({ to, subject, text, html }) => {
     console.warn(`[accountEmail] SMTP not configured — "${subject}" to ${to} not sent`);
     return { sent: false, reason: "Email server (SMTP) is not configured" };
   }
+  if (!isTest && !mailFrom()) {
+    console.warn(`[accountEmail] MAIL_FROM_EMAIL not set — "${subject}" to ${to} not sent`);
+    return { sent: false, reason: "No sender address (MAIL_FROM_EMAIL) is configured" };
+  }
   try {
     await getTransporter().sendMail({
-      from: `"Task Management Blizz board" <${mailFrom() || "no-reply@Blizzboard.local"}>`,
+      from: fromHeader(),
       to,
       subject,
       text,
