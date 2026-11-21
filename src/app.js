@@ -207,3 +207,13 @@ app.use((err, req, res, next) => {
 });
 
 export default app;
+
+// Some hosts (Hostinger's Node.js apps) start src/app.js instead of src/server.js.
+// Then start the real server from here. When server.js is the entry it imports this file;
+// importing server.js again returns that same module, so the server never starts twice.
+if (process.env.NODE_ENV !== "test" && !globalThis.__blizzServerStart) {
+  globalThis.__blizzServerStart = import("./server.js").catch((err) => {
+    console.error("❌ Server failed to start:", err);
+    process.exit(1);
+  });
+}
