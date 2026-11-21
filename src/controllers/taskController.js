@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
-import Task, { TASK_STATUSES, TASK_PRIORITIES, CHECKLIST_TYPES } from "../models/Task.js";
+import Task, { TASK_STATUSES, TASK_PRIORITIES, CHECKLIST_TYPES, CUSTOM_FIELD_TYPES } from "../models/Task.js";
 import User from "../models/User.js";
 import MonthlyProgress from "../models/MonthlyProgress.js";
 import TaskBank from "../models/TaskBank.js";
@@ -395,6 +395,79 @@ const canModifyTask = (req, task) => {
 
 export const MAX_CHECKLIST_ITEMS = 50;
 
+export const MAX_CUSTOM_FIELDS = 20;
+
+/**
+ * Custom fields from the task form: [{ key, label, type, options, value }].
+ * Each value is cleaned for its type; empty values are stored as null.
+ */
+const parseCustomFields = (input) => {
+  if (input === null || input === "") return [];
+  if (!Array.isArray(input)) throw new AssignError("Custom fields must be a list");
+  if (input.length > MAX_CUSTOM_FIELDS) throw new AssignError(`Add at most ${MAX_CUSTOM_FIELDS} custom fields`);
+  const seen = new Set();
+  return input.map((f, i) => {
+    const label = String(f?.label || "").trim();
+    const name = label || `Field ${i + 1}`;
+    if (!label) throw new AssignError(`Custom field ${i + 1}: enter a name`);
+    if (label.length > 60) throw new AssignError(`${name}: the name can be at most 60 characters`);
+    const type = String(f?.type || "");
+    if (!CUSTOM_FIELD_TYPES.includes(type)) throw new AssignError(`${name}: unknown field type`);
+    let key = String(f?.key || "").trim().slice(0, 40) || `f${i + 1}`;
+    while (seen.has(key)) key = `${key}_${i}`;
+    seen.add(key);
+    const options = Array.isArray(f?.options)
+      ? [...new Set(f.options.map((o) => String(o || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 20)
+      : [];
+    const raw = f?.value;
+    const blank = raw === undefined || raw === null || raw === "";
+    let value = null;
+    switch (type) {
+      case "number":
+      case "money":
+      case "progress":
+      case "rating": {
+        if (blank) break;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) throw new AssignError(`${name}: enter a number`);
+        if (type === "progress" && (n < 0 || n > 100)) throw new AssignError(`${name}: progress must be 0–100`);
+        if (type === "rating" && (n < 0 || n > 5)) throw new AssignError(`${name}: rating must be 0–5`);
+        value = n;
+        break;
+      }
+      case "checkbox":
+        value = raw === true || raw === "true";
+        break;
+      case "labels":
+        value = Array.isArray(raw) ? raw.map((v) => String(v)).filter((v) => options.includes(v)) : [];
+        break;
+      case "dropdown":
+        value = !blank && options.includes(String(raw)) ? String(raw) : null;
+        break;
+      case "date":
+        if (blank) break;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) throw new AssignError(`${name}: pick a valid date`);
+        value = String(raw);
+        break;
+      case "email":
+        if (blank) break;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(raw).trim())) throw new AssignError(`${name}: enter a valid email`);
+        value = String(raw).trim().slice(0, 200);
+        break;
+      case "website": {
+        if (blank) break;
+        let url = String(raw).trim().slice(0, 500);
+        if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+        value = url;
+        break;
+      }
+      default:
+        value = blank ? null : String(raw).slice(0, type === "textarea" ? 2000 : 300);
+    }
+    return { key, label, type, options, value };
+  });
+};
+
 /**
  * Checklist rows from the form: [{ _id?, desc, type, employee }] (employee = user id).
  * Employees must belong to the organization. Rows kept by _id keep their answers.
@@ -516,6 +589,7 @@ const shapeTask = (task) => {
       doneAt: c.doneAt,
       doneBy: c.doneBy || "",
     })),
+    customFields: (t.customFields || []).map((f) => ({ key: f.key, label: f.label, type: f.type, options: f.options || [], value: f.value ?? null })),
     isTaskBank: t.isTaskBank || false,
     status: t.status,
     statusHistory: t.statusHistory,
@@ -728,6 +802,17 @@ export const createTask = async (req, res) => {
       }
     }
 
+    // ⭐ custom fields (Client, Budget, Progress…)
+    let customFields = [];
+    if (body.customFields !== undefined) {
+      try {
+        customFields = parseCustomFields(body.customFields);
+      } catch (err) {
+        await discardUploads(req);
+        return sendError(res, err);
+      }
+    }
+
     // ⭐ start → end and the chosen reminder
     const finalDueDate = monthlyConfig ? dueDateOf(monthlyConfig) : dueDate || undefined;
     const schedule = scheduleFrom({ ...body, dueDate: finalDueDate, dueTime: dueTime || "" });
@@ -773,6 +858,7 @@ export const createTask = async (req, res) => {
       dueDate: finalDueDate,
       ...schedule.values,
       checklist,
+      customFields,
       dueTime: dueTime || "",
       priority: priority || "Medium",
       complexity: Number(complexity) || 0,
@@ -1296,6 +1382,15 @@ export const updateTask = async (req, res) => {
         return sendError(res, err);
       }
     }
+    // ⭐ custom fields
+    if (body.customFields !== undefined) {
+      try {
+        task.customFields = parseCustomFields(body.customFields);
+      } catch (err) {
+        await discardUploads(req);
+        return sendError(res, err);
+      }
+    }
     const newDeadline = `${task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : ""}|${task.dueTime || ""}`;
     if (newDeadline !== oldDeadline) {
       // New deadline → reminders start over
@@ -1410,6 +1505,7 @@ export const updateTask = async (req, res) => {
               attachments: st.attachments || [],
             })),
             checklist: (task.checklist || []).map((c) => ({ desc: c.desc, type: c.type, employee: c.employee })),
+            customFields: task.customFields || [],
             status: "To Do",
             statusHistory: [
               { from: null, to: "To Do", changedBy: req.user._id, changedByName: actor.name },

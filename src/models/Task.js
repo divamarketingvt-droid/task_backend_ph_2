@@ -29,6 +29,22 @@ const monthlySchema = new mongoose.Schema(
 
 export const CHECKLIST_TYPES = ["Check", "Text", "Number"];
 
+// ⭐ Custom fields added from the task form ("Create new field")
+export const CUSTOM_FIELD_TYPES = [
+  "text", "textarea", "number", "money", "date", "dropdown", "labels",
+  "checkbox", "website", "email", "phone", "progress", "rating",
+];
+const customFieldSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, trim: true, maxlength: 40 },
+    label: { type: String, required: true, trim: true, maxlength: 60 },
+    type: { type: String, enum: CUSTOM_FIELD_TYPES, required: true },
+    options: { type: [String], default: [] }, // choices for dropdown / labels
+    value: { type: mongoose.Schema.Types.Mixed, default: null },
+  },
+  { _id: false }
+);
+
 // Checklist row: what to check, how it is answered, and who does it
 const checklistItemSchema = new mongoose.Schema(
   {
@@ -183,6 +199,7 @@ const taskSchema = new mongoose.Schema(
     attachments: { type: [attachmentSchema], default: [] },
     subtasks: { type: [subtaskSchema], default: [] },
     checklist: { type: [checklistItemSchema], default: [] },
+    customFields: { type: [customFieldSchema], default: [] },
 
     // 📧 Which task emails were already sent (reset when deadline or assignee changes)
     notifications: {
