@@ -10,10 +10,17 @@ import {
 } from "../controllers/authController.js";
 import { authenticate } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/permissionMiddleware.js";
+import { decryptLoginBody, getLoginKey } from "../services/loginEncryption.js";
 
 const router = express.Router();
 
-router.post("/login", login);
+// Public key the login page uses to encrypt { email, password } before sending
+router.get("/login-key", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ success: true, data: getLoginKey() });
+});
+// { encrypted } is decrypted first; the login logic itself is unchanged
+router.post("/login", decryptLoginBody, login);
 // Public — one-time email verification + password reveal, and forgot-password requests
 router.post("/verify-email", verifyEmail);
 router.post("/forgot-password", forgotPassword);
