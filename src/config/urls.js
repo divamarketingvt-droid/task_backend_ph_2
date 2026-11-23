@@ -8,6 +8,10 @@
 export const PRODUCTION_FRONTEND_URL = "https://blizz-board-frontend.vercel.app";
 export const PRODUCTION_BACKEND_URL = "https://blizz-board-backend.onrender.com";
 
+// Hostinger deployment — always allowed by CORS, even if CORS_ORIGINS is not set on the server
+export const HOSTINGER_FRONTEND_URL = "https://tempered-mediumaquamarine-swan-77.hostingersite.com";
+export const HOSTINGER_BACKEND_URL = "https://decent-lightgreen-goshawk-96.hostingersite.com";
+
 const clean = (url) => String(url || "").trim().replace(/\/+$/, "");
 
 /** Running on Render (it sets RENDER=true) or with NODE_ENV=production */

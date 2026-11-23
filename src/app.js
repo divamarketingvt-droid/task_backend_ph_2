@@ -36,7 +36,7 @@ import { attachPermissions, permissionByMethod, requirePermission } from "./midd
 import { registerChatSocket } from "./socket/Chatsocket.js";
 import { setRealtimeIO } from "./socket/realtime.js";
 import { registerMeetingSocket } from "./socket/meetingSocket.js";
-import { PRODUCTION_FRONTEND_URL } from "./config/urls.js";
+import { PRODUCTION_FRONTEND_URL, HOSTINGER_FRONTEND_URL } from "./config/urls.js";
 
 dotenv.config();
 
@@ -56,6 +56,7 @@ const allowedOrigins = [
     [
       process.env.FRONTEND_URL,
       PRODUCTION_FRONTEND_URL, // https://blizz-board-frontend.vercel.app
+      HOSTINGER_FRONTEND_URL, // https://tempered-mediumaquamarine-swan-77.hostingersite.com
       ...String(process.env.CORS_ORIGINS || "").split(","),
       "http://localhost:3000",
       "http://localhost:5173",
