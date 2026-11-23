@@ -810,8 +810,10 @@ describe("Task email notifications + reminders", () => {
     await new Promise((r2) => setTimeout(r2, 200));
     assert.equal(sentMessages.slice(before).filter((m) => /reassigned/i.test(m.subject)).length, 0);
 
-    // Manager can reassign too; unassigning tells the previous person
-    await call("PATCH", `/api/tasks/${t.data.data.id}`, { token: T.mia, json: { assignedUser: "" } });
+    // a Manager cannot change a task someone else created (only its creator / Admin can)
+    assert.equal((await call("PATCH", `/api/tasks/${t.data.data.id}`, { token: T.mia, json: { assignedUser: "" } })).status, 403);
+    // unassigning tells the previous person
+    await call("PATCH", `/api/tasks/${t.data.data.id}`, { token: T.adminA, json: { assignedUser: "" } });
     assert.ok(await waitFor(() => mailsTo("alice@test.io", /you were removed from Hand over/).length === 1), "removed notice");
   });
 

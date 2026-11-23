@@ -393,6 +393,16 @@ const canModifyTask = (req, task) => {
   return Boolean(task.assignedBy) && String(task.assignedBy) === String(req.user._id);
 };
 
+/**
+ * Editing or deleting a task: SuperAdmin / Admin, or the person who created it.
+ * Managers and Users cannot edit or delete a task someone else created — e.g. a task
+ * Manager 1 gave to Manager 2 can be changed only by Manager 1 (or an Admin).
+ */
+export const canEditOrDeleteTask = (req, task) => {
+  if (isOrgAdmin(req)) return true;
+  return Boolean(task.assignedBy) && String(task.assignedBy) === String(req.user._id);
+};
+
 export const MAX_CHECKLIST_ITEMS = 50;
 
 export const MAX_CUSTOM_FIELDS = 20;
@@ -1228,11 +1238,11 @@ export const updateTask = async (req, res) => {
     }
 
     // ⭐ Task-level authorization (module permission is checked by the route)
-    if (!canModifyTask(req, task)) {
+    if (!canEditOrDeleteTask(req, task)) {
       await discardUploads(req);
       return res.status(403).json({
         success: false,
-        message: "Only the task creator, a Manager or an Admin can edit this task. You can still update its status.",
+        message: "Only the person who created this task or an Admin can edit it. You can still update its status.",
       });
     }
 
@@ -2110,11 +2120,11 @@ export const deleteTask = async (req, res) => {
     const task = await Task.findOne({ _id: req.params.id, ...req.scope, isTaskBank: { $ne: true } });
     if (!task) return res.status(404).json({ success: false, message: "Task not found" });
 
-    // ⭐ Users may only delete tasks they created; Managers/Admins any task in scope
-    if (!canModifyTask(req, task)) {
+    // ⭐ Only the task's creator or an Admin / SuperAdmin may delete it
+    if (!canEditOrDeleteTask(req, task)) {
       return res.status(403).json({
         success: false,
-        message: "You can only delete tasks that you created",
+        message: "Only the person who created this task or an Admin can delete it",
       });
     }
 
