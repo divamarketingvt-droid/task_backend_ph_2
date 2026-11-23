@@ -76,7 +76,8 @@ router.post("/", authenticate, requirePermission("users", "create"), async (req,
 });
 
 // READ — the organization's departments (every member needs these for task forms)
-router.get("/", authenticate, async (req, res) => {
+// Exported so the integration API (/api/zoho/departments) reuses the same handler.
+export const listDepartments = async (req, res) => {
   try {
     const departments = await Department.find(orgFilter(req)).sort({ createdAt: 1 });
     // older departments get their reference code the first time they are listed
@@ -87,7 +88,8 @@ router.get("/", authenticate, async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-});
+};
+router.get("/", authenticate, listDepartments);
 
 // UPDATE the reference code (new tasks use it; existing task IDs stay as they are)
 router.patch("/:id", authenticate, requirePermission("users", "edit"), async (req, res) => {

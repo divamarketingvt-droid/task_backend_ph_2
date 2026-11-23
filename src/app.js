@@ -25,6 +25,8 @@ import pushRoutes from "./routes/pushRoutes.js";
 import customRoleRoutes from "./routes/customRoleRoutes.js";
 import telegramRoutes from "./routes/telegramRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
+import zohoRoutes from "./routes/zohoRoutes.js";
+import integrationTokenRoutes from "./routes/integrationTokenRoutes.js";
 import { trackActivity } from "./services/activityService.js";
 import { getConnectUrl, oauthCallback } from "./controllers/googleConnectController.js";
 import { authorize } from "./middleware/role.js";
@@ -143,6 +145,7 @@ app.get("/", (req, res) => {
       reports: "/api/reports",
       support: "/api/support",
       permissions: "/api/permissions",
+      zoho: "/api/zoho",
     },
   });
 });
@@ -151,12 +154,19 @@ app.use("/api/auth", authRoutes);
 // Public: task page opened from the assignment email (signed link, no login)
 app.use("/api/task-email", taskEmailRoutes);
 
+// Integration REST API for Zoho CRM — its own API-token auth (NOT the login JWT),
+// rate limited, org-isolated. See ZOHO_API_DOCUMENTATION.md
+app.use("/api/zoho", zohoRoutes);
+
 // Google reconnect: Google sends the browser back here (must match GOOGLE_REDIRECT_URI)
 app.get("/oauth2callback", oauthCallback);
 
 // ==================== PROTECTED ROUTES ====================
 // Every protected request: authenticate → data scope → effective permissions
 const protect = [authenticate, attachScope, attachPermissions, trackActivity];
+
+// Integration API tokens (Zoho CRM): Admin / SuperAdmin create, list, revoke, regenerate
+app.use("/api/integrations/tokens", ...protect, integrationTokenRoutes);
 
 // Activity: pages opened / logout (everyone); Activity page (Admin / SuperAdmin)
 app.use("/api/activity", ...protect, activityRoutes);
