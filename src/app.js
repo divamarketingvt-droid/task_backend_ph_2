@@ -27,6 +27,7 @@ import telegramRoutes from "./routes/telegramRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import zohoRoutes from "./routes/zohoRoutes.js";
 import integrationTokenRoutes from "./routes/integrationTokenRoutes.js";
+import mailRoutes from "./routes/mailRoutes.js";
 import { trackActivity } from "./services/activityService.js";
 import { getConnectUrl, oauthCallback } from "./controllers/googleConnectController.js";
 import { authorize } from "./middleware/role.js";
@@ -148,6 +149,7 @@ app.get("/", (req, res) => {
       support: "/api/support",
       permissions: "/api/permissions",
       zoho: "/api/zoho",
+      mail: "/api/mail",
     },
   });
 });
@@ -169,6 +171,9 @@ const protect = [authenticate, attachScope, attachPermissions, trackActivity];
 
 // Integration API tokens (Zoho CRM): Admin / SuperAdmin create, list, revoke, regenerate
 app.use("/api/integrations/tokens", ...protect, integrationTokenRoutes);
+
+// Email: my own Gmail / Zoho Mail / Yahoo Mail mailbox (read over IMAP, send over SMTP)
+app.use("/api/mail", ...protect, mailRoutes);
 
 // Activity: pages opened / logout (everyone); Activity page (Admin / SuperAdmin)
 app.use("/api/activity", ...protect, activityRoutes);

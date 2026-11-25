@@ -22,6 +22,7 @@
     "express": "^4.21.2",
     "ffmpeg-static": "^5.2.0",
     "googleapis": "^178.0.0",
+    "html-to-text": "^10.0.1",
     "imapflow": "^1.7.8",
     "jsonwebtoken": "^9.0.2",
     "luxon": "^3.7.2",
