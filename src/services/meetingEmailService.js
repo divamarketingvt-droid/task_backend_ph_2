@@ -15,9 +15,9 @@ const transporter = {
 };
 
 const BRAND = {
-  name: "Task Management System",
-  primary: "#17365D",
-  accent: "#2563EB",
+  name: "BizBoard",
+  primary: "#002858", // BizBoard navy
+  accent: "#18B098", // BizBoard teal
   background: "#F3F6FA",
   text: "#263445",
   muted: "#64748B",

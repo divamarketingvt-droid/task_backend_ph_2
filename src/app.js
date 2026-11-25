@@ -74,6 +74,8 @@ const refusedOrigins = new Set();
 const checkOrigin = (origin, callback) => {
   // no Origin header = server-to-server, curl, health checks → allowed (CORS is a browser rule)
   if (!origin || allowedOrigins.includes(origin.replace(/\/+$/, ""))) return callback(null, true);
+  // local dev servers on any port (Vite moves to 5174, 5175… when 5173 is busy)
+  if (/^http:\/\/(localhost|127\.0\.0\.1):\d{2,5}$/.test(origin)) return callback(null, true);
   if (!refusedOrigins.has(origin)) {
     refusedOrigins.add(origin);
     console.warn(`CORS: refused origin ${origin} — allowed: ${allowedOrigins.join(", ")}`);

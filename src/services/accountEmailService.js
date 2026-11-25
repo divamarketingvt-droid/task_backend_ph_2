@@ -20,10 +20,10 @@ export const mailFrom = () => {
   const user = smtpUser() || "";
   return /@smtp-brevo\.com$/i.test(user) ? "" : user;
 };
-export const mailFromName = (fallback = "Task Management Blizz board") =>
+export const mailFromName = (fallback = "BizBoard") =>
   (process.env.MAIL_FROM_NAME || "").trim() || fallback;
 /** e.g. "Task Management" <you@gmail.com> */
-export const fromHeader = (name) => `"${mailFromName(name).replace(/"/g, "")}" <${mailFrom() || "no-reply@Blizzboard.local"}>`;
+export const fromHeader = (name) => `"${mailFromName(name).replace(/"/g, "")}" <${mailFrom() || "no-reply@bizboard.local"}>`;
 
 let transporter = null;
 export const getTransporter = () => {
@@ -54,8 +54,8 @@ export const escapeHtml = (value = "") =>
 export const layout = (title, body) => `
 <div style="background:#F2F8FA;padding:32px 12px;font-family:Segoe UI,Arial,sans-serif;color:#123B5D">
   <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #D5E7EE">
-    <div style="background:linear-gradient(135deg,#063b46,#0b8f87);padding:22px 26px;color:#fff">
-      <div style="font-size:12px;letter-spacing:2px;opacity:.8">Task Management Blizz board</div>
+    <div style="background:linear-gradient(135deg,#002858,#109080);padding:22px 26px;color:#fff">
+      <div style="font-size:12px;letter-spacing:2px;opacity:.8">BizBoard</div>
       <div style="font-size:20px;font-weight:700;margin-top:4px">${escapeHtml(title)}</div>
     </div>
     <div style="padding:24px 26px;font-size:14px;line-height:1.6">${body}</div>
